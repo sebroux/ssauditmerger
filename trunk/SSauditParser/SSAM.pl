@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 
+#C:\downloads\ssam>perl ssam2.pl -i c:\downloads\ssam\alg_atx\ -o c:\downloads\ssam\tmp.txt -d eur -f 03/2008.*Gout
 # Author: Sébastien Roux
 # Mailto: roux.sebastien@gmail.com
 # License: GPLv3, see attached license
@@ -7,6 +8,7 @@
 # Modules include
 use Getopt::Std;
 use Strict;
+use DirHandle;
 
 # Set argument parameters
 getopts( "i:o:d:f:h", \%opts ) or DisplayUsage();
@@ -18,11 +20,6 @@ TestDateFormatArg();
 
 $Directory = $opts{i};
 
-opendir( DIRECTORY, $Directory )
-  ;    #|| die  "Cannot open directory $Directory !\n" );
-@DirContents = readdir(DIRECTORY);
-closedir(DIRECTORY);
-
 # Open specified output file
 if ( $opts{o} ) {
 	open( OUTPUT, ">$opts{o}" )
@@ -30,140 +27,165 @@ if ( $opts{o} ) {
 }
 
 # Loop through specified directory
-foreach $file (@DirContents) {
-	if ( !( ( $file eq "." ) || ( $file eq ".." ) ) ) {
-		if ( $file =~ /alg$/ ) {
+# get alg and order by date descendant
+my %files = get_alg_Files($Directory);
+foreach my $file ( reverse sort { $files{$a} <=> $files{$b} } keys %files ) {
 
-			open( INPUT_ALG, $Directory . $file )
-			  or die print "Error: could not open $file\n";
+	open( INPUT_ALG, $file )
+	  or die print "Error: could not open $file\n";
 
-			$LCount = 1;
-			while (<INPUT_ALG>) {
+	$LCount = 1;
 
-				if ( ( $LCount == 1 ) && (/^\[/) ) {
-					chomp;
-					$Line = $_;    # Current line
+	while (<INPUT_ALG>) {
 
-					ChangeDateFormat();
+		#First date/time row followed by "Create Spreadsheet Update Log" row
+		if ( ( $LCount == 1 ) && (/^\[/) ) {
+			chomp;
+			$Line = $_;    # Current line
 
-					# File output
-					if ( $opts{o} ) {
-						print OUTPUT "$Header\n";
-					}
-					else {
-						print "$Header\n";
-					}
+			# Header filtering
+			unless ( $Line !~ /^.*$opts{f}.*$/ ) {
 
+				# Change date format to specified style
+				ChangeDateFormat();
+
+				# File output
+				if ( $opts{o} ) {
+					print OUTPUT "$Line\n";
 				}
-				elsif ( ( $LCount == 2 ) && (/^Create/) ) {
-					chomp;
-					$Line = $_;
 
-					# File output
-					if ( $opts{o} ) {
-						print OUTPUT "$Line: $file\n\n";
-					}
-					else {
-						print "$Line: $file\n\n";
-					}
-				}
+				# StdOut
 				else {
-					if (/^\[/) {
-						chomp;
-						$Line = $_;
-						$Line =~ s/[\[\]]// for 1 .. 2;
-						ChangeDateFormat();
+					print "$Line\n";
+				}
+			}
+
+		}
+
+		# First description row: "Create Spreadsheet Update Log"
+		elsif ( ( $LCount == 2 ) && (/^Create/) ) {
+			chomp;
+			$Linedesc = $_;
+
+			# Header filtering
+			unless ( $Line !~ /^.*$opts{f}.*$/ ) {
+
+				# File output
+				if ( $opts{o} ) {
+					print OUTPUT "$Linedesc: $file\n\n";
+				}
+
+				# StdOut
+				else {
+					print "$Linedesc: $file\n\n";
+				}
+			}
+		}
+
+		else {
+
+			# Date/time row followed by "Log Updates"
+			if (/^\[/) {
+				chomp;
+				$Line = $_;
+
+				#$Line =~ s/[\[\]]// for 1 .. 2;
+				ChangeDateFormat();
+			}
+
+			# Description row: "Log Updates From User"
+			else {
+				$LineD = $_;
+				@desc = split / /, $LineD;
+
+				#ChangeMonthString();
+
+				# Date time and user
+				$FullHeader = "$Line - @desc[5]";
+
+				#print "$FullHeader\n";
+
+				# Header filtering
+				unless ( $FullHeader !~ /^.*$opts{f}.*$/ ) {
+
+					# File output
+					if ( $opts{o} ) {
+						print OUTPUT "$FullHeader\n";
 					}
+
+					# StdOut
 					else {
-						$Line = $_;
-						@desc = split / /, $Line;
+						print "$FullHeader\n";
+					}
 
-						ChangeMonthString();
+					# First row of data logs (atx)
+					$frow = @desc[11];
 
-						$FullHeader = "$Header - @desc[5]";
+					# Last row of data logs (atx)
+					$lrow = ( @desc[11] + @desc[18] - 2 );
 
-						# Filtering
-						unless ( $FullHeader !~ /.*$opts{f}.*$/ ) {
+					#print "First row: $frow, last row: $lrow\n";
 
-							# Header (date time - user) (atg)
-							# File output
-							if ( $opts{o} ) {
-								print OUTPUT "$FullHeader\n";
-							}
-							else {
-								print "$Header - @desc[5]\n";
-							}
+					# Matching rows in data logs (atx)
+					@data = ();
 
-							# First row of data logs (atx)
-							$frow = @desc[11];
+					# Filename without extension
+					$file2 = substr( $file, 0, ( length($file) - 3 ) );
 
-							# Last row of data logs
-							$lrow = ( @desc[11] + @desc[18] - 2 );
+					open( INPUT_ATX, $file2 . "atx" )
+					  or die print "Error: could not open atx\n";
+					while (<INPUT_ATX>) {
+						if ( $. >= $frow && $. <= $lrow ) {
 
-							#print "First row: $frow, last row: $lrow\n";
-
-							# Matching rows in data logs (atx)
-							@data = ();
-
-							# Filename without extension
-							$file2 = substr( $file, 0, ( length($file) - 3 ) );
-
-							open( INPUT_ATX, $Directory . $file2 . "atx" )
-							  or die print "Error: could not open atx\n";
-							while (<INPUT_ATX>) {
-								if ( $. >= $frow && $. <= $lrow ) {
-
-									#$_ =~ s/ /\t/g;
-									push( @data, $_ );
-								}
-							}
-							close(INPUT_ATX);
-
-							foreach (@data) {
-
-								# File output
-								if ( $opts{o} ) {
-									print OUTPUT "$_";
-								}
-
-								#StdOut output
-								else {
-									print "$_";
-								}
-							}
-
-							# File output
-							if ( $opts{o} ) {
-								print OUTPUT "\n";
-							}
-
-							#StdOut output
-							else {
-								print "\n";
-							}
+							#$_ =~ s/ /\t/g;
+							push( @data, $_ );
 						}
 					}
+					close(INPUT_ATX);
+
+					foreach (@data) {
+
+						# File output
+						if ( $opts{o} ) {
+							print OUTPUT "$_";
+						}
+
+						# StdOut
+						else {
+							print "$_";
+						}
+					}
+
+					# File output
+					if ( $opts{o} ) {
+						print OUTPUT "\n";
+					}
+
+					#StdOut output
+					else {
+						print "\n";
+					}
 				}
-				$LCount++;
 			}
-			close(INPUT_ALG);
-			close(OUTPUT);
 		}
+		$LCount++;
 	}
+	close(INPUT_ALG);
 }
+close(OUTPUT);
+exit;
 
 #--------------------------------
 sub DisplayHelp {
 
 	if ( $opts{h} || @ARGV > 0 ) {
 		print "DESCRIPTION :\n"
-		  . "Merge Essbase or Analytic Services( v .5 -v .9 ) SSAudit files (.ATX, .ATG)\n"
-		  . "from specified directory.\n"    
-		  . "Options available : advanced date formatting, filtering.\n";
+		  . "Merge Essbase or Analytic Services (v.5 - v.9) SSAudit files (.ATX, .ATG)\n"
+		  . "from specified directory.\n"
+		  . "Options available : advanced date formatting, header filtering.\n";
 		print "AUTHOR :\n"
 		  . "Written by Sebastien Roux <roux.sebastien\@gmail.com>\n";
-		print "LICENSE :\n"
-		  . "GNU General Public License version 3 (GPLv3)\n";
+		print "LICENSE :\n" . "GNU General Public License version 3 (GPLv3)\n";
 		print "NOTES :\n"
 		  . "Use at your own risk !\n"
 		  . "You will be solely responsible for any damage\n"
@@ -181,8 +203,7 @@ sub DisplayUsage {
 	  . "[-o <outputfile>, -d <arg>, -h]\n\n";
 	print "USAGE: SSAP . exe -i <.atx & .atg directory> "
 	  . "[-o <outputfile>, -d <arg>, -h]\n\n";
-	print
-"  -i   specify SSAudit logs' directory, args: <directory1[;directory2;...]>\n";
+	print "  -i   specify SSAudit logs' directory, arg: <directory>\n";
 	print "  -o   specify output file, arg: <outputfile>\n";
 	print "  -d   specify date format, arg: <ISO|EUR|US>\n";
 	print "  -f   specify filter on headers (case sensitive), arg: <*>\n";
@@ -193,7 +214,7 @@ sub DisplayUsage {
 #--------------------------------
 sub TestInputDirArg {
 
-	@i = split /;/, $opts{i};
+	my @i = split /;/, $opts{i};
 
 	foreach $i (@i) {
 		if ( !-d $i ) {
@@ -219,26 +240,28 @@ sub TestDateFormatArg {
 #--------------------------------
 sub ChangeDateFormat {
 
-	ChangeMonthString();
+	if ( $opts{d} ) {
+		ChangeMonthString();
 
-	$Line =~ s/[\[\]]// for 1 .. 2;
+		$Line =~ s/[\[\]]// for 1 .. 2;
 
-	my @g = split / /, $Line;
-	$lastg = scalar(@g);
-	
-	# Set date format to ISO 8601 extended style (YYYY-MM-DD)
-	if ( uc( $opts{d} ) eq "ISO" ) {
-		$Header = "@g[4]/@g[1]/@g[2] @g[3]";
-	}
+		my @g = split / /, $Line;
+		$lastg = scalar(@g);
 
-	# Set date format to US style (MM/DD/YYYY)
-	elsif ( uc( $opts{d} ) eq "US" ) {
-		$Header = "@g[1]/@g[2]/@g[4] @g[3]";
-	}
+		# Set date format to ISO 8601 extended style (YYYY-MM-DD)
+		if ( uc( $opts{d} ) eq "ISO" ) {
+			$Line = "@g[4]/@g[1]/@g[2] @g[3]";
+		}
 
-	# Set date format to European style (DD/MM/YYYY)
-	elsif ( uc( $opts{d} ) eq "EUR" ) {
-		$Header = "@g[2]/@g[1]/@g[4] @g[3]";
+		# Set date format to US style (MM/DD/YYYY)
+		elsif ( uc( $opts{d} ) eq "US" ) {
+			$Line = "@g[1]/@g[2]/@g[4] @g[3]";
+		}
+
+		# Set date format to European style (DD/MM/YYYY)
+		elsif ( uc( $opts{d} ) eq "EUR" ) {
+			$Line = "@g[2]/@g[1]/@g[4] @g[3]";
+		}
 	}
 }
 
@@ -278,4 +301,14 @@ sub TestDateFormatArg {
 	}
 }
 
-__END__
+#--------------------------------
+# List files an size for specified directory
+sub get_alg_Files {
+	my $dir = shift;
+	my $dh  = DirHandle->new($dir);    #Cannot open directory $Directory: $!";
+	return map { $_ => ( stat($_) )[9] }
+	  map      { "$dir$_" }
+	  grep     { m/.alg/i } $dh->read();
+}
+
+__END__ 
