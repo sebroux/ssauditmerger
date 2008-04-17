@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 
-#C:\downloads\ssam>perl ssam2.pl -i c:\downloads\ssam\alg_atx\ -o c:\downloads\ssam\tmp.txt -d eur -f 03/2008.*Gout
+#perl2exe_include "warnings.pm"
+
 # Author: Sébastien Roux
 # Mailto: roux.sebastien@gmail.com
 # License: GPLv3, see attached license
@@ -304,6 +305,7 @@ sub TestDateFormatArg {
 #--------------------------------
 # List files an size for specified directory
 sub get_alg_Files {
+	
 	my $dir = shift;
 	my $dh  = DirHandle->new($dir);    #Cannot open directory $Directory: $!";
 	return map { $_ => ( stat($_) )[9] }
