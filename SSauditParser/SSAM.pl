@@ -30,7 +30,8 @@ if ( $opts{o} ) {
 # Loop through specified directory
 # get alg and order by date descendant
 my %files = get_alg_Files($Directory);
-foreach my $file ( reverse sort { $files{$a} <=> $files{$b} } keys %files ) {
+#foreach my $file ( sort { $files{$b} <=> $files{$a} } keys %files ) {
+foreach my $file ( sort keys %files ) {
 
 	open( INPUT_ALG, $file )
 	  or die print "Error: could not open $file\n";
