@@ -201,13 +201,14 @@ sub DisplayHelp {
 #--------------------------------
 sub DisplayUsage {
 
-	print "\nUSAGE: perl SSAP . pl -i <.atx & .atg directory> "
+	print "\nUSAGE: perl SSAP.pl -i <.atx & .atg directory> "
 	  . "[-o <outputfile>, -d <arg>, -h]\n\n";
-	print "USAGE: SSAP . exe -i <.atx & .atg directory> "
+	print "USAGE: SSAP.exe -i <.atx & .atg directory> "
 	  . "[-o <outputfile>, -d <arg>, -h]\n\n";
 	print "  -i   specify SSAudit logs' directory, arg: <directory>\n";
 	print "  -o   specify output file, arg: <outputfile>\n";
 	print "  -d   specify date format, arg: <ISO|EUR|US>\n";
+	print "  -b   specify database storage\n";
 	print "  -f   specify filter on headers (case sensitive), arg: <*>\n";
 	print "  -h   display usage\n";
 	exit;
